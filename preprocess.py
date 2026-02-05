@@ -7,11 +7,15 @@ import argparse
 def save_graph(g_json, fp, gname):
     edges = set()
     nv = 0
+
     for u, v in g_json:
         u, v = (u, v) if u < v else (v, u)
         nv = max(u, v, nv)
         edges.add((u, v))
+
+    # Header line: # nodes, #edges, undirected, graph name, jl parser version, integer type for node ids, graph type
     fp.write(f"{nv},{len(edges)},u,{gname},2,Int64,simplegraph\n")
+
     for (u, v) in edges:
         fp.write(f"{u},{v}\n")
 
@@ -22,10 +26,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
     min_edge = args.min_edge
     count = args.count
+
     # Download and unpack archive
     if not os.path.exists("twitch_egos.zip"):
         urllib.request.urlretrieve("https://snap.stanford.edu/data/twitch_egos.zip")
         shutil.unpack_archive("twitch_egos.zip")
+        
     # Process graphs
     with open("twitch_egos/twitch_edges.json") as fp:
         jo = json.load(fp)
