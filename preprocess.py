@@ -27,22 +27,30 @@ if __name__ == "__main__":
     min_edge = args.min_edge
     count = args.count
 
-    # Download and unpack archive
-    if not os.path.exists("twitch_egos.zip"):
-        urllib.request.urlretrieve("https://snap.stanford.edu/data/twitch_egos.zip")
+    if not os.path.exists("twitch_egos.zip"): 
+        # download the dataset if it doesn't exist
+        print("Downloading dataset...")
+        url = "https://snap.stanford.edu/data/twitch_egos.zip"
+        
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response, open("twitch_egos.zip", 'wb') as out_file:
+            shutil.copyfileobj(response, out_file)
+            
+        shutil.unpack_archive("twitch_egos.zip")
+    elif not os.path.exists("twitch_egos/twitch_edges.json"): 
+        # unpack the dataset if it hasn't been unpacked yet
         shutil.unpack_archive("twitch_egos.zip")
         
-    # Process graphs
     with open("twitch_egos/twitch_edges.json") as fp:
         jo = json.load(fp)
         with open("datasets/graphs.lg", "w") as fp2:
-            cnt_tmp = 0
+            written = 0
             for k in jo.keys():
                 # Filter for graphs with more edges than `min_edge`
-                if len(jo[k]) // 2 < min_edge:
+                if len(jo[k]) < min_edge:
                     continue
                 # Only process `count` graphs if specified
-                if count is not None and cnt_tmp >= count:
+                if count is not None and written >= count:
                     break
                 save_graph(jo[k], fp2, k)
-                cnt_tmp += 1
+                written += 1
