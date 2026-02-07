@@ -1,6 +1,3 @@
-# Learning augmented densest subgraph
-Data set can be found at
-https://snap.stanford.edu/data/deezer_ego_nets.html
+# Learning augmented densest subgraph and densest at-most-k subgraph
 
-Densest subgraph algorithms to generate training data labels are from
-https://github.com/tsourakakis-lab/densest-diverse-subgraphs
+Experiments on fast algorithms for finding densest subgraph and densest at-most-k subgraph.
