@@ -112,6 +112,8 @@ function densest_subgraph(G::AbstractGraph, num_iterations::Int = 40, algorithm=
     n = nv(G)
     m = ne(G)
 
+    m == 0 && return collect(1:n), 0.0
+
     low = 0.0
     high = maximum(degree(G)) / 2.0
 
@@ -232,73 +234,104 @@ The algorithm uses a combination of pruning and brute force:
 2. Remove vertices with degree strictly smaller than the current best density.
 3. Perform brute force search on the remaining graph.
 """
-function densest_at_most_k_subgraph(G::AbstractGraph, k::Int)
+function densest_at_most_k_subgraph(G::AbstractGraph, k::Int, timeout_sec::Real = Inf)
     if is_directed(G)
         throw(ArgumentError("densest_at_most_k_subgraph only supports undirected graphs"))
     end
+
+    start_time = time()
+    timed_out() = timeout_sec < Inf && (time() - start_time) > timeout_sec
 
     n = nv(G)
     if k ≥ n
         return densest_subgraph(G)
     end
-    
-    # Step 1: prune the graphs by iteratively remove the lowest degree vertices
-    # Store the best snapshot density once the number of vertices is at most k in dprime
-    H = copy(G)
-    Δ = maximum(degree(H))
-    B = Dict(d => Set(v for v in vertices(H) if degree(H, v) == d) for d in 0:Δ)
-    d = 0
-    dprime = -Inf
-    remaining = n
 
-    while remaining > 0
-        if remaining ≤ k
-            dprime = max(dprime, ne(H) / remaining)
-        end
+    # Iterative pruning: peel H to compute dprime, remove nodes below dprime, repeat.
+    # First iteration on the full G seeds dprime; subsequent iterations tighten it.
+    # We also track best_S_peeling: the actual vertices that achieved dprime,
+    # so we always have a valid witness to return.
+    H              = copy(G)
+    dprime         = 0.0
+    best_S_peeling = Int[]
 
-        # Find the next minimum degree d 
-        d > Δ && break
-        while isempty(B[d])
-            d += 1
-            d > Δ && break
-        end
-        d > Δ && break
+    while true
+        timed_out() && return nothing, 0.0
 
-        v = pop!(B[d]) # Remove a minimum degree vertex v
-        for u in collect(neighbors(H, v))
-            du = degree(H, u)
-            rem_edge!(H, u, v)
-            delete!(B[du], u) 
-            push!(B[du - 1], u)
-        end
-
-        d = max(d-1, 0)
-        remaining -= 1
-    end
-
-    # Step 2: Remove nodes with degree < dprime until no such node remains
-    # Remove nodes will be isolated in the remaining graph. 
-    H = copy(G)
-    while nv(H) > 0
+        # Remove edges of nodes with degree strictly below dprime
         removes = [v for v in vertices(H) if 0 < degree(H, v) < dprime]
-        isempty(removes) && break
         for v in removes
             for u in collect(neighbors(H, v))
                 rem_edge!(H, u, v)
             end
         end
+
+        prev_dprime = dprime
+
+        # Recompute dprime by peeling H down to k vertices, saving the witness vertices
+        Hp    = copy(H)
+        Δp    = maximum(degree(Hp); init=0)
+        Δp == 0 && break
+
+        # Bp[i] = set of vertices with degree i in Hp; updated dynamically as we peel
+        Bp    = Dict(d => Set(v for v in vertices(Hp) if degree(Hp, v) == d) for d in 0:Δp)
+        dp    = 0
+        rem_p = nv(Hp)
+
+        while rem_p > 0
+            if rem_p ≤ k
+                new_d = ne(Hp) / rem_p
+                if new_d > dprime
+                    dprime         = new_d
+                    best_S_peeling = [v for v in vertices(Hp) if degree(Hp, v) > 0]  # exclude isolated nodes
+                end
+            end
+            dp > Δp && break
+            while isempty(Bp[dp])
+                dp += 1
+                dp > Δp && break
+            end
+
+            dp > Δp && break
+            vp = pop!(Bp[dp])
+
+            for u in collect(neighbors(Hp, vp))
+                du = degree(Hp, u)
+                rem_edge!(Hp, vp, u)
+                delete!(Bp[du], u)
+                push!(Bp[du - 1], u)
+            end
+
+            dp = max(dp - 1, 0)
+            rem_p -= 1
+        end
+
+        abs(dprime - prev_dprime) < 1e-9 && break  # dprime didn't improve, no more pruning possible
     end
 
-    # Step 3: Brute force search on the remaining graph H with at most k vertices
-    best_S = Int[]
-    best_density = 0.0
-    H = [v for v in vertices(H) if degree(H, v) > 0]
-    for size in 1:min(k, length(H))
-        for S in combinations(H, size)
-            dS = density(G, S)
-            if dS > best_density
-                best_density = dS
-                best_S = S
+    # Brute force search on each connected component of H independently.
+    # The optimal solution lies entirely within one component, so we search
+    # each with its own reduced k, shrinking the combination space dramatically.
+    best_S       = best_S_peeling   # valid witness from peeling, never empty if dprime > 0
+    best_density = dprime
+
+    for comp in connected_components(H)
+        comp_k = min(k, length(comp))
+        # Sort by degree descending so high-density combos are found early
+        comp = sort(comp, by=v -> degree(G, v), rev=true)
+        for size in 1:comp_k
+            iter_count = 0
+            (size - 1) / 2 <= best_density && continue  # clique upper bound: can't beat current best
+            for S in combinations(comp, size)
+                if iter_count % 10000 == 0
+                    timed_out() && return nothing, 0.0
+                end
+                dS = density(G, S)
+                if dS > best_density
+                    best_density = dS
+                    best_S = S
+                end
+                iter_count += 1
             end
         end
     end
