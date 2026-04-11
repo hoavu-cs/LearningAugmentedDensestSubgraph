@@ -16,7 +16,6 @@ training_output_file   = _base * "_train.json"
 validation_output_file = _base * "_val.json"
 train_size = 200   # how many graphs to use for training
 val_size   = 200   # how many graphs to use for validation
-max_nodes   = 100
 
 mkpath("data")
 println("Running with $(nthreads()) thread(s).")
@@ -48,10 +47,6 @@ for gid in graph_ids
     all_ids     = [Int(endpoint) for e in raw_edges for endpoint in e]
     node_list   = sort(unique(all_ids))
     node_to_idx = Dict(n => i for (i, n) in enumerate(node_list))  # original ID → 1-based index
-
-    if length(node_list) > max_nodes
-        continue
-    end
 
     G = SimpleGraph(length(node_list))
     for e in raw_edges
@@ -127,9 +122,13 @@ open(validation_output_file, "w") do f
 end
 
 function print_stats(label, res)
+    println("$label ($(length(res)) graphs):")
+    if isempty(res)
+        println("  (no graphs)")
+        return
+    end
     densities = [v["damks_density"] for (_, v) in res]
     sizes     = [v["size"]           for (_, v) in res]
-    println("$label ($(length(res)) graphs):")
     println("  Node count    — min: $(minimum(sizes)),  max: $(maximum(sizes)),  mean: $(round(sum(sizes)/length(sizes), digits=1))")
     println("  DamkS density — min: $(round(minimum(densities), digits=3)),  max: $(round(maximum(densities), digits=3)),  mean: $(round(sum(densities)/length(densities), digits=3))")
 end

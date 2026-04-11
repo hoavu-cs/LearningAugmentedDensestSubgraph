@@ -12,7 +12,11 @@ include("densest_subgraph.jl")
 
 train_file = length(ARGS) >= 1 ? ARGS[1] : "data/twitch_edges_train.json"
 val_file   = length(ARGS) >= 2 ? ARGS[2] : "data/twitch_edges_val.json"
-K          = length(ARGS) >= 3 ? parse(Int, ARGS[3]) : 15   # DamkS parameter k
+
+let k_idx = findfirst(==("--k"), ARGS)
+    global K = k_idx !== nothing ? parse(Int, ARGS[k_idx + 1]) :
+               length(ARGS) >= 3 ? parse(Int, ARGS[3]) : 15
+end
 
 mkpath("outputs")
 mkpath("datasets/damks")
@@ -169,6 +173,15 @@ acc = mean(y_pred_test .== y_test)
 println("Classifier accuracy: ", round(acc, digits=4))
 println(DecisionTree.confusion_matrix(y_test, y_pred_test))
 
+tp_test = sum((y_pred_test .== 1) .& (y_test .== 1))
+fp_test = sum((y_pred_test .== 1) .& (y_test .== 0))
+fn_test = sum((y_pred_test .== 0) .& (y_test .== 1))
+tn_test = sum((y_pred_test .== 0) .& (y_test .== 0))
+fpr_test = (fp_test + tn_test) > 0 ? fp_test / (fp_test + tn_test) : 0.0
+fnr_test = (tp_test + fn_test) > 0 ? fn_test / (tp_test + fn_test) : 0.0
+epsilon  = max(fpr_test, fnr_test)
+println("Test FPR: $(round(fpr_test, digits=4)), FNR: $(round(fnr_test, digits=4)), epsilon: $(round(epsilon, digits=4))")
+
 # ---------------------------------------------------------------------------
 # Evaluate on validation graphs
 # ---------------------------------------------------------------------------
@@ -197,7 +210,7 @@ Threads.@threads for i in eachindex(val_keys)
     predict_density_vals[i] = compute_density_set(G, S)
 
     t0 = time()
-    _, aug_dens            = augment_damks(G, S, K, 0.2)
+    _, aug_dens            = augment_damks(G, S, K, epsilon)
     augmented_times[i]     = time() - t0
     augmented_density_vals[i] = aug_dens
 

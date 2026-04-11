@@ -317,6 +317,7 @@ function densest_at_most_k_subgraph(G::AbstractGraph, k::Int, timeout_sec::Real 
 
     for comp in connected_components(H)
         comp_k = min(k, length(comp))
+
         # Sort by degree descending so high-density combos are found early
         comp = sort(comp, by=v -> degree(G, v), rev=true)
         for size in 1:comp_k
@@ -331,6 +332,10 @@ function densest_at_most_k_subgraph(G::AbstractGraph, k::Int, timeout_sec::Real 
                     best_density = dS
                     best_S = S
                 end
+                # S is a q-clique: density (q-1)/2 is the maximum achievable for any subset of
+                # size ≤ q. Stop checking further combinations of this size, and the clique upper
+                # bound will skip all sizes ≤ q in subsequent component iterations.
+                dS ≥ (size - 1) / 2 - 1e-9 && break
                 iter_count += 1
             end
         end

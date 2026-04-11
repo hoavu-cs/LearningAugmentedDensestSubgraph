@@ -2,13 +2,39 @@ using JSON, Random, Graphs, GraphPlot, Compose, Colors
 import Cairo, Fontconfig
 
 # ---------------------------------------------------------------------------
-# Load Cit-HepPh.txt
+# Arguments: [--input FILE] [--num_graphs N] [--max_n N]
+# ---------------------------------------------------------------------------
+
+input_file = "Cit-HepPh.txt"
+num_graphs = 5000
+max_n      = 100
+
+let i = 1
+    while i <= length(ARGS)
+        if ARGS[i] == "--input" && i < length(ARGS)
+            global input_file = ARGS[i+1]; i += 2
+        elseif ARGS[i] == "--num_graphs" && i < length(ARGS)
+            global num_graphs = parse(Int, ARGS[i+1]); i += 2
+        elseif ARGS[i] == "--max_n" && i < length(ARGS)
+            global max_n = parse(Int, ARGS[i+1]); i += 2
+        else
+            global input_file = ARGS[i]; i += 1
+        end
+    end
+end
+
+# Derive output path: Foo.txt → data/Foo.json
+_base       = splitext(basename(input_file))[1]
+output_file = joinpath("data", _base * ".json")
+
+# ---------------------------------------------------------------------------
+# Load edge list
 # ---------------------------------------------------------------------------
 
 edges_raw = Tuple{Int,Int}[]
 all_nodes = Set{Int}()
 
-open("Amazon0302.txt") do f
+open(input_file) do f
     for line in eachline(f)
         startswith(line, "#") && continue
         parts = split(strip(line))
@@ -21,6 +47,7 @@ open("Amazon0302.txt") do f
     end
 end
 
+println("Input: $input_file → output: $output_file (num_graphs=$num_graphs, max_n=$max_n)")
 println("Loaded $(length(edges_raw)) edges over $(length(all_nodes)) nodes")
 
 # Build adjacency list (undirected) for fast induced subgraph lookup
@@ -37,8 +64,6 @@ all_nodes_vec = collect(all_nodes)
 # ---------------------------------------------------------------------------
 
 Random.seed!(42)
-num_graphs  = 5000
-sample_size = 50
 
 function bfs_sample(adj, seed, target)
     visited = Set{Int}([seed])
@@ -54,15 +79,16 @@ function bfs_sample(adj, seed, target)
         end
     end
     nodes = collect(visited)
-    length(nodes) > target && shuffle!(nodes)
-    return nodes[1:min(target, length(nodes))]
+    shuffle!(nodes)
+    nodes = nodes[1:min(end, target)]
+    return nodes
 end
 
 dataset = Dict{String, Vector{Vector{Int}}}()
 
 for i in 1:num_graphs
     seed    = all_nodes_vec[rand(1:length(all_nodes_vec))]
-    sampled = Set(bfs_sample(adj, seed, sample_size))
+    sampled = Set(bfs_sample(adj, seed, max_n))
 
     graph_edges = Vector{Int}[]
     for u in sampled
@@ -104,10 +130,11 @@ println("Saved example graph ($(nv(G_ex)) nodes, $(ne(G_ex)) edges) → outputs/
 # Write to JSON
 # ---------------------------------------------------------------------------
 
-open("data/Amazon0302.json", "w") do f
+mkpath("data")
+open(output_file, "w") do f
     JSON.print(f, dataset)
 end
 
 sizes = [length(v) for v in values(dataset)]
-println("Written $(num_graphs) graphs to data/Cit-HepPh.json")
+println("Written $(num_graphs) graphs to $output_file")
 println("Edge counts — min: $(minimum(sizes)), max: $(maximum(sizes)), mean: $(round(sum(sizes)/length(sizes), digits=1))")
