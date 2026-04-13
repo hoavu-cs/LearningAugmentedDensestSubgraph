@@ -1,3 +1,29 @@
+# ---------------------------------------------------------------------------
+# Reads the JSON produced by create_dataset.jl, computes the exact DamkS
+# solution for each graph in parallel (with a per-graph timeout), and writes
+# two labeled JSON files for use by damks_experiment.jl.
+#
+# Each output entry stores:
+#   "size"          — number of nodes in the subgraph
+#   "edges"         — edge list (1-based indices, after remapping)
+#   "damks_vlist"   — 1-based vertex indices of the DamkS solution
+#   "damks_density" — density |E(S)|/|S| of the DamkS solution
+#
+# Graphs that exceed the per-graph timeout (default 2 min) are skipped.
+#
+# Usage:
+#   julia --threads auto create_labeled_dataset_damks.jl <input.json> [K]
+#
+# Arguments:
+#   input.json   path to the dataset produced by create_dataset.jl
+#   K            size constraint for DamkS (default: 15); must match the value
+#                used in damks_experiment.jl
+#
+# Outputs:
+#   data/<basename>_train.json   labeled training set (200 graphs)
+#   data/<basename>_val.json     labeled validation set (200 graphs)
+# ---------------------------------------------------------------------------
+
 using Graphs, JSON, ProgressMeter, Random
 using .Threads
 

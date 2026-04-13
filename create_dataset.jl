@@ -1,3 +1,29 @@
+# ---------------------------------------------------------------------------
+# Step 1 of the data pipeline: sample connected induced subgraphs from a large
+# SNAP-format edge-list (e.g. Cit-HepPh.txt) and write them to a JSON file
+# (e.g. data/Cit-HepPh.json) for use by create_labeled_dataset_damks.jl.
+#
+# For each sample, a random seed node is chosen and BFS is run to collect up
+# to max_n nodes; the induced subgraph edges over those nodes are stored.
+#
+# Output format: { "0": [[u,v],...], "1": [[u,v],...], ... }
+# All vertex IDs are original (not remapped); remapping to 1-based indices
+# is done in create_labeled_dataset_damks.jl at load time.
+#
+# Usage:
+#   julia create_dataset.jl [--input FILE] [--num_graphs N] [--max_n N]
+#
+# Defaults:
+#   --input      Cit-HepPh.txt   source edge-list (SNAP format, #-commented headers)
+#   --num_graphs 5000            number of subgraphs to sample
+#   --max_n      100             maximum nodes per sampled subgraph
+#
+# Outputs:
+#   data/<basename>.json         sampled subgraph dataset
+#   outputs/graph_vis.png        visualization of the first sampled subgraph
+# ---------------------------------------------------------------------------
+
+
 using JSON, Random, Graphs, GraphPlot, Compose, Colors
 import Cairo, Fontconfig
 

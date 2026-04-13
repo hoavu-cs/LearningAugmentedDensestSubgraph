@@ -1,3 +1,36 @@
+# ---------------------------------------------------------------------------
+# Step 3 of the data pipeline: run the learning-augmented DamkS experiment.
+#
+# Trains a random forest classifier on node features (degree, average neighbor
+# degree, graph size) to predict DamkS membership, then evaluates an augmented
+# algorithm on validation graphs and compares it against the exact solver.
+#
+# Augmented algorithm (at validation time):
+#   1. Predict DamkS membership for each node using the trained classifier.
+#   2. Expand the predicted set S by adding epsilon*|S|/(1-epsilon) external
+#      neighbors most connected to S (to hedge against false negatives).
+#   3. Trim by removing the lowest-degree node until |S| <= K.
+# epsilon is derived from the classifier's test FPR/FNR.
+#
+# Usage:
+#   julia --threads auto damks_experiment.jl <train.json> <val.json> [K]
+#   julia --threads auto damks_experiment.jl <train.json> <val.json> --k K
+#
+# Arguments:
+#   train.json   labeled training set from create_labeled_dataset_damks.jl
+#   val.json     labeled validation set from create_labeled_dataset_damks.jl
+#   K            size constraint for DamkS (default: 15); must match the value
+#                used in create_labeled_dataset_damks.jl
+#
+# Outputs:
+#   datasets/damks/node_features_with_labels_damks.csv   training feature matrix
+#   outputs/damks_example.png                            example graph with DamkS highlighted
+#   outputs/damks_predictor_vs_augmented.png             predictor vs augmented density scatter
+#   outputs/damks_augmented_vs_optimal.png               augmented vs optimal density scatter
+#   outputs/damks_predictor_vs_optimal.png               predictor vs optimal density scatter
+#   outputs/damks_approx_ratio_hist.png                  approximation ratio distribution
+# ---------------------------------------------------------------------------
+
 using Graphs, GraphPlot, Compose, Colors
 using JSON, Statistics, StatsBase, Plots, Random
 using DecisionTree, DataFrames, CSV
